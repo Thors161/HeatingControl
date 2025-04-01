@@ -1,0 +1,47 @@
+let HASS_IP = "192.168.1.4"; // Home Assistant IP
+let TOKEN = "LONG_LIVED_TOKEN"
+let TIMEOUT = 5; // Timeout in seconds
+let MAX_FAILURES = 10; // consecutive failures
+let checkInterval = 60000; // in ms
+
+let failureCount = 0;
+
+function setAllOutputsLow() {
+    Shelly.call("Switch.Set", { id: 0, on: false }, null);
+    Shelly.call("Switch.Set", { id: 1, on: false }, null);
+    print("⚠️ Home Assistant down for 10 minutes - All outputs set to LOW");
+}
+
+function resetFailureCount() {
+    failureCount = 0;
+    print("✅ Home Assistant is up");
+}
+
+function checkHass() {
+    Shelly.call(
+        "HTTP.REQUEST",
+        {
+            method: "GET",
+            url: "http://" + HASS_IP + ":8123/api/",
+            timeout: TIMEOUT,
+            headers: {
+                "Authorization": "Bearer " + TOKEN,
+                "Content-Type": "application/json"
+            }
+        },
+        function (result, error_code, error_message) {
+            if (error_code === 0 && result.code === 200 && result.body === '{"message":"API running."}') {
+                resetFailureCount();
+            } else {
+                failureCount++;
+                print("❌ Home Assistant is down - Failure count: " + failureCount);
+                if (failureCount >= MAX_FAILURES) {
+                    setAllOutputsLow();
+                }
+            }
+        }
+    );
+}
+
+Timer.set(checkInterval, true, checkHass);
+checkHass();
